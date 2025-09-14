@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lenketavle + Nyhetsfeed</title>
+  <meta name="description" content="En enkel lenkehjemmeside med logoer + valgfri nyhetsfeed fra dine egne kilder (RSS). Alt lagres lokalt." />
+  <style>
+    :root {
+      --bg: #0b1020;
+      --card: #141b34;
+      --muted: #9aa4bf;
+      --text: #e8ecf8;
+      --accent: #4f8cff;
+      --accent-2: #6fd1a8;
+      --danger: #ff6b6b;
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: linear-gradient(180deg, #0b1020, #0b1428 30%, #0b1020 100%);
+      color: var(--text);
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    header { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    h1 { margin: 0; font-size: clamp(22px, 4vw, 28px); letter-spacing: 0.3px; }
+    h2 { margin: 18px 0 10px; font-size: clamp(18px, 3.5vw, 22px); color: #dfe6ff; }
+    .muted { color: var(--muted); }
+
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      background: var(--card); border: 1px solid #1f274a; color: var(--text);
+      padding: 10px 14px; border-radius: 12px; cursor: pointer; font-weight: 600;
+      transition: transform 0.04s ease, background 0.2s ease, border 0.2s ease;
+    }
+    .btn:hover { background: #1a2242; }
+    .btn.primary { background: var(--accent); border-color: #2e69ff; color: white; }
+    .btn.primary:hover { filter: brightness(1.05); }
+    .btn.ghost { background: transparent; border-color: #2a3258; color: var(--muted); }
+    .btn.danger { background: var(--danger); border-color: #ff5a5a; color: white; }
+
+    .search {
+      flex: 1 1 240px; min-width: 200px; display: flex; align-items: center; gap: 8px;
+      background: var(--card); border: 1px solid #1f274a; border-radius: 12px; padding: 10px 12px; color: var(--text);
+    }
+    .search input { flex: 1; background: transparent; border: none; outline: none; color: inherit; font-size: 14px; }
+
+    .grid {
+      margin-top: 18px;
+      display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+    .card {
+      position: relative; background: var(--card); border: 1px solid #1f274a; border-radius: var(--radius);
+      padding: 14px; display: flex; align-items: center; gap: 12px; user-select: none;
+    }
+    .drag { cursor: grab; }
+    .drag:active { cursor: grabbing; }
+    .favicon { width: 40px; height: 40px; border-radius: 12px; flex: 0 0 40px; display:grid; place-items:center; overflow: hidden; background: #202951; }
+    .favicon img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .favicon .initials { font-weight: 700; color: #dce6ff; font-size: 14px; }
+    .meta { min-width: 0; display: grid; gap: 4px; }
+    .title { font-weight: 700; letter-spacing: 0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .url { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .open { margin-left: auto; }
+    .menu { position: absolute; top: 8px; right: 8px; }
+    .menu button { background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 18px; }
+
+    .dropdown { position: absolute; top: 32px; right: 8px; background: #0f1530; border: 1px solid #2a3464; border-radius: 10px; display: none; min-width: 160px; z-index: 2; }
+    .dropdown.open { display: block; }
+    .dropdown button { width: 100%; text-align: left; padding: 10px 12px; border: none; background: transparent; color: var(--text); cursor: pointer; font-size: 14px; }
+    .dropdown button:hover { background: #1a2146; }
+    .dropdown .danger { color: #ffd4d4; }
+
+    .empty { opacity: 0.7; border: 1px dashed #2b335c; border-radius: var(--radius); padding: 26px; text-align: center; }
+
+    dialog { border: 1px solid #2a3464; border-radius: 16px; background: #0d1433; color: var(--text); width: min(680px, 92vw); }
+    dialog::backdrop { background: rgba(10, 14, 30, 0.6); backdrop-filter: blur(2px); }
+    form.grid { display: grid; gap: 12px; }
+    .field { display: grid; gap: 8px; }
+    .field label { font-size: 13px; color: var(--muted); }
+    .field input { background: #0a112b; color: var(--text); border: 1px solid #27305f; border-radius: 10px; padding: 10px 12px; }
+    .row { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 4px; }
+    .hint { font-size: 12px; color: var(--muted); }
+
+    .footer { margin-top: 26px; display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
+    a.muted { color: var(--muted); }
+
+    .pill { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border:1px solid #28315d; border-radius:999px; font-size:12px; color:var(--muted); }
+    .kbd { background:#0b122e; border:1px solid #28315d; border-radius:6px; padding:2px 6px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:11px; color:#cdd6ff; }
+
+    /* News styles */
+    .news-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:28px; }
+    .news-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .switch { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border:1px solid #28315d; border-radius:999px; }
+    .news-list { display:grid; gap:10px; margin-top:12px; }
+    .news-item { display:flex; gap:12px; align-items:flex-start; background:var(--card); border:1px solid #1f274a; border-radius:14px; padding:12px; }
+    .news-item .source { font-size:12px; color:var(--muted); }
+    .news-item .ago { font-size:12px; color:var(--muted); margin-left:6px; }
+    .news-item a.title { font-weight:700; text-decoration:none; color:var(--text); }
+    .news-item a.title:hover { text-decoration:underline; }
+    .news-favicon { width:24px; height:24px; border-radius:6px; display:grid; place-items:center; overflow:hidden; background:#202951; flex:0 0 24px; }
+    .news-empty { opacity:0.7; border:1px dashed #2b335c; border-radius:var(--radius); padding:18px; text-align:center; }
+
+    @media (hover: hover) {
+      .card:hover { border-color: #33407a; }
+      .news-item:hover { border-color:#33407a; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Lenketavle <span class="pill" title="Tips: dra for å sortere"><span class="kbd">drag</span> sorter</span></h1>
+      <div class="toolbar">
+        <button class="btn primary" id="addBtn">+ Legg til lenke</button>
+        <button class="btn" id="exportBtn">Eksporter</button>
+        <button class="btn ghost" id="importBtn">Importer</button>
+        <button class="btn ghost" id="resetBtn" title="Tøm alt">Nullstill</button>
+      </div>
+    </header>
+
+    <div class="search" style="margin-top:14px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 21L16.65 16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <input id="searchInput" placeholder="Søk i lenkene dine…" />
+    </div>
+
+    <section id="grid" class="grid" aria-live="polite"></section>
+    <p class="empty" id="emptyState" style="display:none">Ingen lenker enda. Klikk <b>+ Legg til lenke</b> for å starte.</p>
+
+    <div class="news-head">
+      <h2>Nyhetsfeed</h2>
+      <div class="news-controls">
+        <label class="switch"><input type="checkbox" id="toggleNews"><span class="muted">Vis nyheter</span></label>
+        <select id="newsLimit" class="btn ghost" title="Antall saker">
+          <option value="20">Topp 20</option>
+          <option value="50">Topp 50</option>
+          <option value="100">Topp 100</option>
+        </select>
+        <button class="btn" id="refreshNews">Oppdater</button>
+        <button class="btn ghost" id="manageFeedsBtn">Kilder</button>
+      </div>
+    </div>
+    <div id="newsList" class="news-list" style="display:none"></div>
+    <p id="newsEmpty" class="news-empty" style="display:none">Ingen nyheter (enda). Skru på «Vis nyheter» og/eller legg til kilder.</p>
+
+    <div class="footer">
+      <div>
+        <span class="hint">Logoer hentes automatisk via favicon fra domenet. Nyheter hentes fra RSS (via allorigins.win).</span>
+      </div>
+      <div>
+        <span class="hint">Alt lagres lokalt i nettleseren. Ingen server nødvendig.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dialog: Add/Edit link -->
+  <dialog id="linkDialog">
+    <form id="linkForm" class="grid">
+      <h3 id="dialogTitle" style="margin:4px 0 0">Legg til lenke</h3>
+      <input type="hidden" id="editId" />
+      <div class="field">
+        <label for="url">URL eller domene <span class="hint">(f.eks. vg.no eller https://www.vg.no)</span></label>
+        <input id="url" type="text" placeholder="vg.no eller https://…" required />
+      </div>
+      <div class="field">
+        <label for="titleInput">Visningsnavn <span class="hint">(valgfritt – foreslås basert på domenet)</span></label>
+        <input id="titleInput" type="text" placeholder="VG" />
+      </div>
+      <div class="row">
+        <button class="btn ghost" type="button" id="cancelBtn">Avbryt</button>
+        <button class="btn primary" id="saveBtn">Lagre</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialog: Manage feeds -->
+  <dialog id="feedsDialog">
+    <form id="feedsForm" class="grid">
+      <h3 style="margin:4px 0 0">Nyhetskilder (RSS)</h3>
+      <div id="feedsList"></div>
+      <div class="field" style="margin-top:8px">
+        <label>Legg til ny kilde</label>
+        <div style="display:grid; grid-template-columns: 1fr 2fr auto; gap:8px;">
+          <input id="feedName" type="text" placeholder="Navn (f.eks. VG)" />
+          <input id="feedUrl" type="url" placeholder="RSS‑URL (https://…)" />
+          <button class="btn" type="button" id="addFeedBtn">Legg til</button>
+        </div>
+        <div class="hint">Tips: Mange aviser tilbyr RSS. Eksempler: NRK toppsaker, VG, E24, DN. Du kan også lime inn andre RSS‑lenker.</div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+          <button class="btn ghost" type="button" data-demo="NRK|https://www.nrk.no/toppsaker.rss">+ NRK</button>
+          <button class="btn ghost" type="button" data-demo="VG|https://www.vg.no/rss/feed/?limit=50">+ VG</button>
+          <button class="btn ghost" type="button" data-demo="E24|https://e24.no/rss">+ E24</button>
+          <button class="btn ghost" type="button" data-demo="DN|https://www.dn.no/rss">+ DN</button>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn ghost" type="button" id="closeFeedsBtn">Ferdig</button>
+      </div>
+    </form>
+  </dialog>
+
+  <input type="file" id="filePicker" accept="application/json" style="display:none" />
+
+  <script>
+    // ----- Storage keys -----
+    const storageKey = 'linkhub.v1';                  // links
+    const feedsKey = 'linkhub.feeds.v1';              // news feeds
+    const newsEnabledKey = 'linkhub.news.enabled';    // boolean
+    const newsLimitKey = 'linkhub.news.limit';        // 20/50/100
+
+    /** @type {{id:string, url:string, title:string, domain:string}[]} */
+    let state = [];
+    /** @type {{id:string, name:string, url:string, enabled:boolean}[]} */
+    let feeds = [];
+
+    // ----- Utils -----
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+    const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const getDomain = (u) => { try { return new URL(u).hostname.replace(/^www\./,''); } catch { return ''; } };
+    const faviconFor = (domain) => domain ? `https://icons.duckduckgo.com/ip3/${domain}.ico` : '';
+    const initials = (domain) => (domain||'').split('.').slice(0,1)[0].slice(0,3).toUpperCase() || 'WWW';
+
+    // Accept vg.no, e24.no/something, etc. by auto-adding https:// if missing
+    function normalizeUrl(input) {
+      let u = (input || '').trim();
+      if (!u) return '';
+      if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+      try {
+        const parsed = new URL(u);
+        return parsed.href;
+      } catch {
+        return '';
+      }
+    }
+
+    // Very light domain sanity (has a dot or is localhost/IP)
+    function domainLooksOk(domain) {
+      if (!domain) return false;
+      if (domain === 'localhost') return true;
+      if (/^\d+\.\d+\.\d+\.\d+$/.test(domain)) return true; // IPv4
+      return /\./.test(domain);
+    }
+
+    // ----- Links: CRUD + render -----
+    function loadLinks() {
+      try { state = JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch { state = []; }
+      renderLinks();
+    }
+    function saveLinks() { localStorage.setItem(storageKey, JSON.stringify(state)); }
+
+    function renderLinks() {
+      const grid = $('#grid');
+      const empty = $('#emptyState');
+      grid.innerHTML = '';
+      const q = $('#searchInput').value.trim().toLowerCase();
+      const items = state.filter(x => !q || x.title.toLowerCase().includes(q) || x.url.toLowerCase().includes(q) || x.domain.toLowerCase().includes(q));
+      empty.style.display = items.length ? 'none' : 'block';
+      for (const link of items) {
+        const card = document.createElement('article');
+        card.className = 'card drag';
+        card.draggable = true;
+        card.dataset.id = link.id;
+
+        // Drag handlers
+        card.addEventListener('dragstart', (e)=>{
+          e.dataTransfer.setData('text/plain', link.id);
+          card.style.opacity = '0.6';
+        });
+        card.addEventListener('dragend', ()=> card.style.opacity = '1');
+        card.addEventListener('dragover', (e)=>{ e.preventDefault(); });
+        card.addEventListener('drop', (e)=>{
+          e.preventDefault();
+          const draggedId = e.dataTransfer.getData('text/plain');
+          if (!draggedId || draggedId === link.id) return;
+          const from = state.findIndex(x=>x.id===draggedId);
+          const to = state.findIndex(x=>x.id===link.id);
+          const [moved] = state.splice(from,1);
+          state.splice(to,0,moved);
+          saveLinks();
+          renderLinks();
+        });
+
+        const fav = document.createElement('div');
+        fav.className = 'favicon';
+        const img = document.createElement('img');
+        img.alt = `Logo for ${link.domain}`;
+        img.src = faviconFor(link.domain);
+        img.onerror = () => { fav.innerHTML = `<span class="initials">${initials(link.domain)}</span>`; };
+        img.onload = () => { fav.innerHTML = ''; fav.appendChild(img); };
+        fav.innerHTML = `<span class="initials">${initials(link.domain)}</span>`;
+
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        const title = document.createElement('div');
+        title.className = 'title';
+        title.textContent = link.title || link.domain || link.url;
+        const url = document.createElement('div');
+        url.className = 'url';
+        url.textContent = link.domain || link.url;
+        meta.appendChild(title); meta.appendChild(url);
+
+        const open = document.createElement('a');
+        open.className = 'btn open';
+        open.textContent = 'Åpne';
+        open.href = link.url;
+        open.target = '_blank';
+        open.rel = 'noopener noreferrer';
+
+        const menu = document.createElement('div');
+        menu.className = 'menu';
+        const menuBtn = document.createElement('button');
+        menuBtn.title = 'Flere valg';
+        menuBtn.innerHTML = '⋯';
+        menuBtn.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          const wasOpen = dropdown.classList.contains('open');
+          $$('.dropdown').forEach(d => d.classList.remove('open'));
+          if (!wasOpen) dropdown.classList.add('open');
+        });
+        const dropdown = document.createElement('div');
+        dropdown.className = 'dropdown';
+        const edit = document.createElement('button'); edit.textContent = 'Rediger'; edit.addEventListener('click', ()=> { dropdown.classList.remove('open'); openDialog(link); });
+        const del = document.createElement('button'); del.className = 'danger'; del.textContent = 'Slett'; del.addEventListener('click', ()=> { dropdown.classList.remove('open'); removeLink(link.id); });
+        dropdown.appendChild(edit); dropdown.appendChild(del);
+        menu.appendChild(menuBtn); menu.appendChild(dropdown);
+
+        card.appendChild(fav); card.appendChild(meta); card.appendChild(open); card.appendChild(menu);
+        grid.appendChild(card);
+      }
+    }
+
+    function removeLink(id){
+      if (!confirm('Slette lenken?')) return;
+      state = state.filter(x=>x.id!==id);
+      saveLinks(); renderLinks();
+    }
+
+    function openDialog(link){
+      const dlg = $('#linkDialog');
+      $('#editId').value = link?.id || '';
+      $('#url').value = link?.url?.replace(/^https?:\/\//i,'').replace(/^www\./i,'') || '';
+      $('#titleInput').value = link?.title || '';
+      $('#dialogTitle').textContent = link ? 'Rediger lenke' : 'Legg til lenke';
+      dlg.showModal();
+      setTimeout(()=> $('#url').focus(), 0);
+    }
+
+    function submitDialog(e){
+      e?.preventDefault();
+      const id = $('#editId').value || uid();
+      const raw = $('#url').value.trim();
+      const url = normalizeUrl(raw);
+      const domain = getDomain(url);
+      if (!url || !domain || !domainLooksOk(domain)) {
+        alert('Ugyldig URL/domene. Eksempler: vg.no, https://www.vg.no, e24.no/boers');
+        return;
+      }
+      let title = $('#titleInput').value.trim();
+      if (!title) title = domain;
+
+      const existingIdx = state.findIndex(x=>x.id===id);
+      const payload = { id, url, title, domain };
+      if (existingIdx >= 0) state[existingIdx] = payload; else state.push(payload);
+      saveLinks(); renderLinks();
+      $('#linkDialog').close();
+      $('#linkForm').reset();
+    }
+
+    // Import/Export/Reset
+    function exportData(){
+      const blob = new Blob([JSON.stringify(state, null, 2)], {type: 'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'lenker.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+    function importData(file){
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (!Array.isArray(data)) throw new Error('Ugyldig format');
+          state = data.map(x=> {
+            const url = normalizeUrl(String(x.url));
+            const domain = getDomain(url);
+            return { id: x.id || uid(), url, title: String(x.title||''), domain };
+          }).filter(x=>domainLooksOk(x.domain));
+          saveLinks(); renderLinks();
+        } catch(err){ alert('Kunne ikke importere: ' + err.message); }
+      };
+      reader.readAsText(file);
+    }
+
+    // ----- News: feeds, fetch, render -----
+    function seedFeeds(){
+      // only on very first run
+      if (localStorage.getItem(feedsKey)) return;
+      feeds = [
+        { id: uid(), name:'NRK', url:'https://www.nrk.no/toppsaker.rss', enabled: true },
+        { id: uid(), name:'VG',  url:'https://www.vg.no/rss/feed/?limit=50', enabled: true },
+        { id: uid(), name:'E24', url:'https://e24.no/rss', enabled: true },
+        { id: uid(), name:'DN',  url:'https://www.dn.no/rss', enabled: true },
+      ];
+      localStorage.setItem(feedsKey, JSON.stringify(feeds));
+      localStorage.setItem(newsEnabledKey, 'true');
+      localStorage.setItem(newsLimitKey, '20');
+    }
+    function loadFeeds(){
+      try { feeds = JSON.parse(localStorage.getItem(feedsKey) || '[]'); } catch { feeds = []; }
+      const enabled = localStorage.getItem(newsEnabledKey);
+      $('#toggleNews').checked = enabled !== 'false'; // default on
+      const lim = localStorage.getItem(newsLimitKey) || '20';
+      $('#newsLimit').value = lim;
+      updateNewsVisibility();
+      renderFeedsManager();
+    }
+    function saveFeeds(){ localStorage.setItem(feedsKey, JSON.stringify(feeds)); }
+
+    function updateNewsVisibility(){
+      const on = $('#toggleNews').checked;
+      $('#newsList').style.display = on ? '' : 'none';
+      $('#newsEmpty').style.display = on ? 'none' : '';
+      localStorage.setItem(newsEnabledKey, on ? 'true' : 'false');
+      if (on) refreshNews();
+    }
+
+    function renderFeedsManager(){
+      const list = $('#feedsList');
+      list.innerHTML = '';
+      if (!feeds.length) {
+        list.innerHTML = '<p class="hint">Ingen kilder enda. Legg til under.</p>';
+        return;
+      }
+      for (const f of feeds) {
+        const row = document.createElement('div');
+        row.className = 'card';
+        row.style.gap = '8px';
+        row.style.alignItems = 'center';
+        row.style.padding = '10px 12px';
+        row.innerHTML = `
+          <input type="checkbox" ${f.enabled?'checked':''} data-id="${f.id}" class="feed-toggle" title="Aktiv" />
+          <div style="display:grid; gap:4px; min-width:0; flex:1;">
+            <div class="title">${f.name}</div>
+            <div class="url">${f.url}</div>
+          </div>
+          <button class="btn ghost feed-del" data-id="${f.id}" title="Slett">Slett</button>
+        `;
+        list.appendChild(row);
+      }
+      $$('.feed-toggle', list).forEach(cb => cb.addEventListener('change', (e)=>{
+        const id = e.target.getAttribute('data-id');
+        const f = feeds.find(x=>x.id===id); if (!f) return;
+        f.enabled = e.target.checked;
+        saveFeeds();
+      }));
+      $$('.feed-del', list).forEach(btn => btn.addEventListener('click', ()=>{
+        const id = btn.getAttribute('data-id');
+        feeds = feeds.filter(x=>x.id!==id);
+        saveFeeds(); renderFeedsManager();
+      }));
+      // Demo quick-add
+      $$('button[data-demo]', $('#feedsDialog')).forEach(b => b.addEventListener('click', ()=>{
+        const [name, url] = b.getAttribute('data-demo').split('|');
+        addFeed(name, url);
+      }));
+    }
+
+    function addFeed(name, url){
+      const n = (name || '').trim();
+      const u = (url || '').trim();
+      if (!n || !/^https?:\/\//i.test(u)) { alert('Oppgi navn og en gyldig RSS‑URL (https://…)'); return; }
+      feeds.push({ id: uid(), name: n, url: u, enabled: true });
+      saveFeeds(); $('#feedName').value=''; $('#feedUrl').value=''; renderFeedsManager();
+    }
+
+    function timeAgo(d){
+      const now = new Date();
+      const diffMs = now - d;
+      const sec = Math.round(diffMs/1000);
+      const min = Math.round(sec/60);
+      const hour = Math.round(min/60);
+      const day = Math.round(hour/24);
+      if (sec < 60) return `${sec}s`;
+      if (min < 60) return `${min}m`;
+      if (hour < 24) return `${hour}t`;
+      return `${day}d`;
+    }
+
+    function parseRSS(text, sourceName){
+      const out = [];
+      const xml = new DOMParser().parseFromString(text, 'application/xml');
+      if (xml.querySelector('parsererror')) return out;
+      const items = Array.from(xml.querySelectorAll('item'));
+      if (items.length){
+        for (const it of items){
+          const title = (it.querySelector('title')?.textContent || '').trim();
+          let link = (it.querySelector('link')?.textContent || '').trim();
+          if (!link){
+            const l = it.querySelector('guid')?.textContent?.trim();
+            if (l?.startsWith('http')) link = l;
+          }
+          const pub = it.querySelector('pubDate')?.textContent || it.querySelector('dc\\:date, date')?.textContent || '';
+          const date = pub ? new Date(pub) : new Date();
+          out.push({ title, link, date, source: sourceName || getDomain(link) });
+        }
+        return out;
+      }
+      const entries = Array.from(xml.querySelectorAll('entry'));
+      for (const e of entries){
+        const title = (e.querySelector('title')?.textContent || '').trim();
+        let link = e.querySelector('link')?.getAttribute('href') || '';
+        const pub = e.querySelector('updated')?.textContent || e.querySelector('published')?.textContent || '';
+        const date = pub ? new Date(pub) : new Date();
+        out.push({ title, link, date, source: sourceName });
+      }
+      return out;
+    }
+
+    async function fetchFeed(feed){
+      const proxied = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(feed.url);
+      const res = await fetch(proxied, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Feil ' + res.status);
+      const text = await res.text();
+      return parseRSS(text, feed.name);
+    }
+
+    async function refreshNews(){
+      const on = $('#toggleNews').checked;
+      if (!on) return;
+      const listEl = $('#newsList');
+      const emptyEl = $('#newsEmpty');
+      listEl.innerHTML = '';
+      emptyEl.style.display = 'none';
+      const spinner = document.createElement('div');
+      spinner.className = 'news-empty';
+      spinner.textContent = 'Henter nyheter…';
+      listEl.appendChild(spinner);
+
+      const active = feeds.filter(f=>f.enabled);
+      if (!active.length){
+        listEl.innerHTML = '';
+        emptyEl.textContent = 'Ingen kilder er aktivert. Åpne «Kilder» og legg til/aktiver noen.';
+        emptyEl.style.display = '';
+        return;
+      }
+      try {
+        const results = await Promise.allSettled(active.map(fetchFeed));
+        let items = [];
+        results.forEach((r)=>{ if (r.status === 'fulfilled') items = items.concat(r.value); });
+        const seen = new Set();
+        items = items.filter(x=>{
+          if (!x.link) return false;
+          const key = x.link.split('?')[0];
+          if (seen.has(key)) return false;
+          seen.add(key); return true;
+        });
+        items.sort((a,b)=> (b.date?.getTime?.()||0) - (a.date?.getTime?.()||0));
+        const limit = parseInt($('#newsLimit').value || '20', 10);
+        items = items.slice(0, limit);
+        renderNews(items);
+      } catch(err){
+        listEl.innerHTML = '';
+        emptyEl.textContent = 'Kunne ikke hente nyheter. Noen kilder kan blokkere tredjepartstilgang. Prøv igjen eller sjekk RSS‑URL.';
+        emptyEl.style.display = '';
+      }
+    }
+
+    function renderNews(items){
+      const listEl = $('#newsList');
+      listEl.innerHTML = '';
+      if (!items.length){
+        const p = document.createElement('p');
+        p.className = 'news-empty';
+        p.textContent = 'Ingen nyhetsposter funnet.';
+        listEl.appendChild(p);
+        return;
+      }
+      for (const it of items){
+        const row = document.createElement('div');
+        row.className = 'news-item';
+        const dom = getDomain(it.link);
+        const fav = document.createElement('div');
+        fav.className = 'news-favicon';
+        const img = document.createElement('img');
+        img.alt = `Logo for ${dom}`;
+        img.src = faviconFor(dom);
+        img.onerror = ()=> { fav.textContent = (dom||'www').slice(0,2).toUpperCase(); };
+        fav.appendChild(img);
+
+        const col = document.createElement('div');
+        col.style.display = 'grid';
+        col.style.gap = '4px';
+        const a = document.createElement('a');
+        a.href = it.link;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = it.title || it.link;
+        a.className = 'title';
+        const meta = document.createElement('div');
+        meta.className = 'source';
+        meta.textContent = it.source || dom || '';
+        const ago = document.createElement('span');
+        ago.className = 'ago';
+        try { ago.textContent = '· ' + timeAgo(new Date(it.date)); } catch { /* ignore */ }
+        meta.appendChild(ago);
+        col.appendChild(a); col.appendChild(meta);
+
+        row.appendChild(fav); row.appendChild(col);
+        listEl.appendChild(row);
+      }
+    }
+
+    // ----- Events -----
+    $('#addBtn').addEventListener('click', ()=> openDialog());
+    $('#exportBtn').addEventListener('click', exportData);
+    $('#importBtn').addEventListener('click', ()=> $('#filePicker').click());
+    $('#filePicker').addEventListener('change', (e)=>{ const f = e.target.files?.[0]; if (f) importData(f); e.target.value = ''; });
+    $('#resetBtn').addEventListener('click', ()=>{ if (confirm('Slette alle lenker?')) { state = []; saveLinks(); renderLinks(); } });
+    $('#cancelBtn').addEventListener('click', ()=> $('#linkDialog').close());
+    $('#saveBtn').addEventListener('click', submitDialog);
+    $('#linkForm').addEventListener('submit', submitDialog);
+    $('#searchInput').addEventListener('input', renderLinks);
+    document.addEventListener('click', ()=> $$('.dropdown').forEach(d=> d.classList.remove('open')));
+
+    // News controls
+    $('#toggleNews').addEventListener('change', updateNewsVisibility);
+    $('#refreshNews').addEventListener('click', refreshNews);
+    $('#newsLimit').addEventListener('change', ()=>{ localStorage.setItem(newsLimitKey, $('#newsLimit').value); refreshNews(); });
+    $('#manageFeedsBtn').addEventListener('click', ()=>{
+      renderFeedsManager();
+      $('#feedsDialog').showModal();
+    });
+    $('#closeFeedsBtn').addEventListener('click', ()=> $('#feedsDialog').close());
+    $('#addFeedBtn').addEventListener('click', ()=> addFeed($('#feedName').value, $('#feedUrl').value));
+    $('#feedsForm').addEventListener('submit', (e)=> e.preventDefault());
+
+    // ----- Seed + Load -----
+    function seedLinks(){
+      if (localStorage.getItem(storageKey)) return;
+      state = [
+        { id: uid(), url: 'https://www.nrk.no', title: 'NRK', domain: 'nrk.no' },
+        { id: uid(), url: 'https://www.vg.no', title: 'VG', domain: 'vg.no' },
+        { id: uid(), url: 'https://www.dn.no', title: 'Dagens Næringsliv', domain: 'dn.no' },
+        { id: uid(), url: 'https://www.e24.no', title: 'E24', domain: 'e24.no' }
+      ];
+      saveLinks();
+    }
+
+    seedLinks();
+    (function seedFeeds(){
+      if (localStorage.getItem(feedsKey)) return;
+      feeds = [
+        { id: uid(), name:'NRK', url:'https://www.nrk.no/toppsaker.rss', enabled: true },
+        { id: uid(), name:'VG',  url:'https://www.vg.no/rss/feed/?limit=50', enabled: true },
+        { id: uid(), name:'E24', url:'https://e24.no/rss', enabled: true },
+        { id: uid(), name:'DN',  url:'https://www.dn.no/rss', enabled: true },
+      ];
+      localStorage.setItem(feedsKey, JSON.stringify(feeds));
+      localStorage.setItem(newsEnabledKey, 'true');
+      localStorage.setItem(newsLimitKey, '20');
+    })();
+
+    (function loadFeeds(){
+      try { feeds = JSON.parse(localStorage.getItem(feedsKey) || '[]'); } catch { feeds = []; }
+      const enabled = localStorage.getItem(newsEnabledKey);
+      $('#toggleNews').checked = enabled !== 'false';
+      const lim = localStorage.getItem(newsLimitKey) || '20';
+      $('#newsLimit').value = lim;
+      updateNewsVisibility();
+      renderFeedsManager();
+    })();
+
+    loadLinks();
+    if ($('#toggleNews').checked) refreshNews();
+  </script>
+</body>
+</html>
